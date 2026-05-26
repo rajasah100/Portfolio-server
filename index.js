@@ -24,8 +24,32 @@ app.use(
 );
 app.use(express.json({ limit: "1mb" }));
 
+// Root route — Vercel मा deploy verify गर्न
+app.get("/", (req, res) => {
+  res.json({ 
+    message: "Portfolio server is running ✅",
+    status: "ok",
+    time: new Date().toISOString()
+  });
+});
+
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", time: new Date().toISOString() });
+});
+
+// MongoDB connection middleware (serverless को लागि)
+let dbConnected = false;
+app.use(async (req, res, next) => {
+  try {
+    if (!dbConnected) {
+      await connectDB(process.env.MONGO_URI);
+      dbConnected = true;
+    }
+    next();
+  } catch (err) {
+    console.error("DB connection error:", err);
+    res.status(500).json({ message: "Database connection failed" });
+  }
 });
 
 app.use("/api/auth", authRoutes);
@@ -48,10 +72,15 @@ app.use((err, req, res, next) => {
   res.status(err.status || 500).json({ message: err.message || "Server error" });
 });
 
-const PORT = process.env.PORT || 5000;
 
-connectDB(process.env.MONGO_URI).then(() => {
-  app.listen(PORT, () => {
-    console.log(`🚀 Server running on http://localhost:${PORT}`);
+if (process.env.NODE_ENV !== "production") {
+  const PORT = process.env.PORT || 5000;
+  connectDB(process.env.MONGO_URI).then(() => {
+    app.listen(PORT, () => {
+      console.log(`🚀 Server running on http://localhost:${PORT}`);
+    });
   });
-});
+}
+
+
+export default app;
